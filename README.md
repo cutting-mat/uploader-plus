@@ -2,7 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/@cutting-mat/uploader-plus.svg)](https://www.npmjs.com/package/@cutting-mat/uploader-plus) [![license](https://img.shields.io/github/license/cutting-mat/uploader.svg)]()
 
-基于 ElementPlus，整合图片上传前压缩、上传前剪裁、IOS 图片方向自动校正、自定义文件类型的 Vue 上传组件
+基于 ElementPlus，整合图片上传前压缩、上传前剪裁、IOS 图片方向自动校正、自定义文件类型的 Vue 上传组件。
+
+适用于 ElementUI 的[Vue2 版本](https://github.com/cutting-mat/uploader)
 
 ## Feature
 
@@ -42,7 +44,7 @@ Vue.use(uploader, uploadConfig); // 安装时传入的配置为全局配置
  * @cutting-mat/uploader-plus 配置文件
  * 支持 el-upload 除请求相关（action, headers, data, name, with-credentials, http-request）以外的所有 Prop
  * 支持 el-upload 的所有 Method
- * 附 el-upload 文档: https://element.eleme.cn/#/zh-CN/component/upload
+ * 附 el-upload 文档: https://element-plus.gitee.io/zh-CN/component/upload.html
  *
  * 额外支持以下属性，均支持全局配置：
 
