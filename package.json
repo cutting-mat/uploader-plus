@@ -1,0 +1,34 @@
+{
+  "name": "@cutting-mat/uploader-plus",
+  "version": "0.1.0",
+  "description": "基于 ElementPlus，整合图片上传前压缩、上传前剪裁、IOS 图片方向自动校正、自定义文件类型的 Vue 上传组件",
+  "main": "dist/index.umd.min.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cutting-mat/uploader-plus.git"
+  },
+  "author": "tower1229@foxmail.com",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cutting-mat/uploader-plus/issues"
+  },
+  "homepage": "https://github.com/cutting-mat/uploader-plus#readme",
+  "private": false,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build-doc": "vue-cli-service build",
+    "build": "vue-cli-service build --target lib --dest dist --name index ./src/index.js"
+  },
+  "dependencies": {
+    "cropperjs": "^1.5.12",
+    "ios-photo-repair": "^1.1.1",
+    "vue": "^3.2.37"
+  },
+  "devDependencies": {
+    "@element-plus/icons-vue": "^2.0.9",
+    "@vue/cli-plugin-babel": "^5.0.8",
+    "@vue/cli-service": "^5.0.8",
+    "axios": "^0.27.2",
+    "element-plus": "^2.2.13"
+  }
+}
