@@ -391,17 +391,7 @@ const cropperMethod = function (action) {
       console.warn("cropperMethod 参数错误: ", action);
   }
 };
-const clearFiles = function () {
-  // el-upload 方法
-  myupload.value.clearFiles();
-};
-const abort = function () {
-  controller.value.abort();
-};
-const submit = function () {
-  // el-upload 方法
-  myupload.value.submit();
-};
+
 // 剪裁图片DOM
 const CropperImg = ref(null);
 // 自定义上传逻辑
@@ -491,6 +481,24 @@ const customUpload = async (params) => {
     return res.data;
   });
 };
+
+const clearFiles = function () {
+  // el-upload 方法
+  myupload.value.clearFiles();
+};
+const abort = function () {
+  controller.value.abort();
+};
+const submit = function () {
+  // el-upload 方法
+  myupload.value.submit();
+};
+// 暴露方法
+defineExpose({
+  clearFiles,
+  abort,
+  submit,
+});
 
 // onMounted(() => {
 //   console.warn(CropperImg.value);

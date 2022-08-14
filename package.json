@@ -1,6 +1,6 @@
 {
   "name": "@cutting-mat/uploader-plus",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "基于 ElementPlus，整合图片上传前压缩、上传前剪裁、IOS 图片方向自动校正、自定义文件类型的 Vue 上传组件",
   "main": "dist/index.umd.min.js",
   "repository": {
