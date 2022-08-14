@@ -11,13 +11,13 @@
     :on-remove="handleRemove"
     :http-request="customUpload"
   >
-    <div :id="triggerId">
-      <slot name="default">
-        <el-button>点击上传</el-button>
-      </slot>
-      <slot name="trigger"></slot>
+    <slot name="default">
+      <el-button>点击上传</el-button>
+    </slot>
+    <template #tip>
       <slot name="tip"></slot>
-    </div>
+    </template>
+
     <!-- edit dialog -->
     <el-dialog
       v-model="dialogVisible"
@@ -71,11 +71,12 @@
     </el-dialog>
   </el-upload>
 </template>
-<script>
+
+<script setup>
+import { ref, computed, watch, inject, useAttrs, onMounted } from "vue";
 import { fixImgFile } from "ios-photo-repair";
 import Cropper from "cropperjs";
 import "cropperjs/dist/cropper.css";
-import { inject } from "vue";
 import {
   Crop,
   Refresh,
@@ -85,7 +86,6 @@ import {
 } from "@element-plus/icons-vue";
 
 let cropperInstance;
-
 // 调试开关
 const DEBUG = process.env.NODE_ENV === "development";
 
@@ -98,427 +98,405 @@ const fixJpgFileName = function (fileName) {
 };
 
 // 文件类型集合
-const FileTypeMap = {
-  "t-image": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"],
-  "t-video": [".mp4", ".rmvb", ".avi", ".mov", ".3gp", ".webm"],
-  "t-audio": [".wav", ".mp3", ".ogg", ".acc"],
-  "t-word": [".docx", ".doc"],
-  "t-excel": [".xlsx", ".xls"],
-  "t-ppt": [".ppt", ".pptx"],
-  "t-document": [".pdf", "t-word", "t-excel", "t-ppt"],
-  "t-zip": [".zip", ".rar"],
+import FileTypeMap from "../assets/FileTypeMap.js";
+
+const props = defineProps({
+  accept: {
+    type: String,
+    default: "*",
+  },
+  modelValue: {
+    type: Array,
+    required: false,
+    default() {
+      return [];
+    },
+  },
+  limitSize: {
+    // 文件尺寸限制
+    type: Number,
+    required: false,
+    default() {
+      return 100 * 1024 * 1024;
+    },
+  },
+  imgCompress: {
+    // 开启图片压缩
+    type: Boolean,
+    required: false,
+    default() {
+      return true;
+    },
+  },
+  imgCompressOption: {
+    // 图片压缩配置
+    type: Object,
+    required: false,
+    default() {
+      return {
+        maxWidth: 1000,
+        maxHeight: 1000,
+      };
+    },
+  },
+  imgCrop: {
+    // 开启图片剪裁
+    type: Boolean,
+    required: false,
+    default() {
+      return false;
+    },
+  },
+  imgCropOption: {
+    // 图片剪裁配置
+    type: Object,
+    required: false,
+    default() {
+      return {
+        ratio: 1,
+        minWidth: 0,
+        minHeight: 0,
+        maxWidth: 1000,
+        maxHeight: 1000,
+      };
+    },
+  },
+  uploadMethod: {
+    // 自定义上传方法，参数（file/blob, fileName）
+    type: Function,
+    required: false,
+  },
+  responseTransfer: {
+    // 接口返回数据 与 fileList 数据格式转换函数
+    type: Function,
+    required: false,
+    default(response) {
+      return response;
+    },
+  },
+  BeforeUploadError: {
+    // 上传前校验失败回调
+    type: Function,
+    required: false,
+    default(info) {
+      return console.warn(info);
+    },
+  },
+});
+
+// 事件
+const emits = defineEmits(["update:modelValue"]);
+
+// 插件全局配置
+const globalOption = inject("$UploaderOption");
+// 最终配置
+const propsFinnal = computed(() => {
+  const globalOptionKeys = Object.keys(globalOption);
+
+  let result = {};
+  Object.keys(props).forEach((prop) => {
+    result[prop] =
+      globalOptionKeys.indexOf(prop) === -1 ? props[prop] : globalOption[prop];
+  });
+  return result;
+});
+// 上传组件ref
+const myupload = ref(null);
+
+const getExtByType = (type) => {
+  const quickType = Object.assign(
+    {},
+    FileTypeMap,
+    globalOption.quickType || {}
+  );
+  if (type && Array.isArray(quickType[type])) {
+    let classList = [];
+    let extList = [];
+    quickType[type].forEach((e) => {
+      if (e.indexOf("t-") === 0) {
+        classList.push(e);
+      } else {
+        extList.push(e);
+      }
+    });
+    if (classList.length) {
+      classList.forEach((classType) => {
+        extList = extList.concat(getExtByType(classType));
+      });
+    }
+    return extList;
+  } else if (type && type.split) {
+    return [type.toLowerCase()];
+  }
 };
 
-export default {
-  name: "Uploader",
-  props: {
-    modelValue: {
-      type: Array,
-      required: false,
-      default() {
-        return [];
-      },
-    },
-    triggerId: {
-      // 配合实现富文本插件上传功能
-      type: String,
-      required: false,
-      default: "upload_image_trigger" + parseInt(Math.random() * 1e8),
-    },
-    limitSize: {
-      // 文件尺寸限制
-      type: Number,
-      required: false,
-      default() {
-        return 100 * 1024 * 1024;
-      },
-    },
-    imgCompress: {
-      // 开启图片压缩
-      type: Boolean,
-      required: false,
-      default() {
-        return true;
-      },
-    },
-    imgCompressOption: {
-      // 图片压缩配置
-      type: Object,
-      required: false,
-      default() {
-        return {
-          maxWidth: 1000,
-          maxHeight: 1000,
-        };
-      },
-    },
-    imgCrop: {
-      // 开启图片剪裁
-      type: Boolean,
-      required: false,
-      default() {
-        return false;
-      },
-    },
-    imgCropOption: {
-      // 图片剪裁配置
-      type: Object,
-      required: false,
-      default() {
-        return {
-          ratio: 1,
-          minWidth: 0,
-          minHeight: 0,
-          maxWidth: 1000,
-          maxHeight: 1000,
-        };
-      },
-    },
-    uploadMethod: {
-      // 自定义上传方法，参数（file/blob, fileName）
-      type: Function,
-      required: false,
-    },
-    responseTransfer: {
-      // 接口返回数据 与 fileList 数据格式转换函数
-      type: Function,
-      required: false,
-      default(response) {
-        return response;
-      },
-    },
-    BeforeUploadError: {
-      // 上传前校验失败回调
-      type: Function,
-      required: false,
-      default(info) {
-        return console.warn(info);
-      },
-    },
+const acceptFinnal = computed(() => {
+  if (props.accept && props.accept.indexOf("t-") !== -1) {
+    const typeArray = props.accept.split(",");
+    let result = [];
+    typeArray.forEach((type) => {
+      result = result.concat(getExtByType(type));
+    });
+    return result.join(",");
+  } else {
+    return props.accept || "*";
+  }
+});
+// attrs
+const attrs = useAttrs();
+const fileListFinnal = computed(
+  () => {
+    return attrs.fileList || props.modelValue || [];
   },
-  components: {
-    Crop,
-    Refresh,
-    Sort,
-    RefreshRight,
-    RefreshLeft,
-  },
-  data() {
-    return {
-      dialogVisible: false,
-      cropResult: null,
-      fileListFinnal: [],
-      controller: null,
-      globalOption: {},
-    };
-  },
-  computed: {
-    acceptFinnal() {
-      if (this.$attrs.accept && this.$attrs.accept.indexOf("t-") !== -1) {
-        const typeArray = this.$attrs.accept.split(",");
-        let result = [];
-        typeArray.forEach((type) => {
-          result = result.concat(this.getExtByType(type));
-        });
-        return result.join(",");
-      } else {
-        return this.$attrs.accept || "*";
-      }
-    },
-    propsFinnal() {
-      const getDefaultValue = (key) => {
-        if (Object.keys(this.globalOption).indexOf(key) !== -1) {
-          return this.globalOption[key];
-        }
-        return this.$props[key];
-      };
-      let result = {};
-      Object.keys(this.$props).forEach((prop) => {
-        result[prop] = getDefaultValue(prop);
-      });
-      return result;
-    },
-  },
-  watch: {
-    modelValue: {
-      handler(newValue) {
-        this.fileListFinnal = this.$attrs.fileList || newValue || [];
-        if (this.$refs.myupload) {
-          this.$refs.myupload.uploadFiles = newValue.filter((ef) => {
-            return newValue.findIndex((f) => f.uid === ef.uid) !== -1;
-          });
-        }
-      },
-      deep: true,
-      immediate: true,
-    },
-  },
-  methods: {
-    getExtByType(type) {
-      const quickType = Object.assign(
-        {},
-        FileTypeMap,
-        this.globalOption.quickType || {}
-      );
-      if (type && Array.isArray(quickType[type])) {
-        let classList = [];
-        let extList = [];
-        quickType[type].forEach((e) => {
-          if (e.indexOf("t-") === 0) {
-            classList.push(e);
-          } else {
-            extList.push(e);
-          }
-        });
-        if (classList.length) {
-          classList.forEach((classType) => {
-            extList = extList.concat(this.getExtByType(classType));
-          });
-        }
-        return extList;
-      } else if (type && type.split) {
-        return [type.toLowerCase()];
-      }
-    },
-    handleBeforeUpload: function (file) {
-      // 尺寸校验
-      if (file.size > this.propsFinnal.limitSize) {
-        this.propsFinnal.BeforeUploadError({
-          message: "文件大小超出限制",
-          type: "warning",
-        });
-        return false;
-      }
-      // 格式校验
-      if (
-        this.acceptFinnal !== "*" &&
-        this.acceptFinnal.indexOf(
-          file.name.substring(file.name.lastIndexOf(".")).toLowerCase()
-        ) === -1
-      ) {
-        this.propsFinnal.BeforeUploadError({
-          message: "文件格式不正确",
-          type: "warning",
-        });
-        return false;
-      }
+  {
+    immediate: true,
+  }
+);
+// 组件变量
+let dialogVisible = ref(false);
+let cropResult = ref(null);
+let controller = ref(null);
 
-      if (typeof this.$attrs["before-upload"] === "function") {
-        return this.$attrs["before-upload"](file);
-      } else if (
-        this.globalOption &&
-        typeof this.globalOption.beforeUpload === "function"
-      ) {
-        return this.globalOption.beforeUpload(file);
-      } else {
-        return true;
-      }
-    },
-    handleonExceed: function (file, fileList) {
-      if (typeof this.$attrs["on-exceed"] === "function") {
-        this.$attrs["on-exceed"](file, fileList);
-      } else if (
-        this.globalOption &&
-        typeof this.globalOption.onExceed === "function"
-      ) {
-        this.globalOption.onExceed(file, fileList);
-      }
-    },
-    handleChange: function (file, fileList) {
-      const doneFiles = fileList.filter((e) => e.status === "success");
-      if (doneFiles.length === fileList.length) {
-        this.$emit(
-          "update:modelValue",
-          doneFiles.map((e) => {
-            let data = e.response
-              ? this.propsFinnal.responseTransfer(e.response)
-              : e;
-            // 扩展字段
-            data.uid = e.uid;
-            data.status = e.status;
-            return data;
-          })
-        );
-      }
+// 方法
+const handleBeforeUpload = function (file) {
+  // 尺寸校验
+  if (file.size > propsFinnal.value.limitSize) {
+    propsFinnal.value.BeforeUploadError({
+      message: "文件大小超出限制",
+      type: "warning",
+    });
+    return false;
+  }
+  // 格式校验
+  if (
+    acceptFinnal.value !== "*" &&
+    acceptFinnal.value.indexOf(
+      file.name.substring(file.name.lastIndexOf(".")).toLowerCase()
+    ) === -1
+  ) {
+    console.log(file.name.substring(file.name.lastIndexOf(".")).toLowerCase());
+    propsFinnal.value.BeforeUploadError({
+      message: "文件格式不正确",
+      type: "warning",
+    });
+    return false;
+  }
 
-      if (typeof this.$attrs["on-change"] === "function") {
-        this.$attrs["on-change"](file, fileList);
-      }
-    },
-    handleProgress(e) {
-      if (typeof this.$attrs["on-progress"] === "function") {
-        if (e.total > 0) {
-          e.percent = (e.loaded / e.total) * 100;
-        }
-        this.$attrs["on-progress"](e);
-      }
-    },
-    handleRemove: function (file, fileList) {
-      this.$emit(
-        "update:modelValue",
-        fileList.map((e) => {
-          let data = e.response
-            ? this.propsFinnal.responseTransfer(e.response)
-            : e;
-          data.uid = e.uid;
-          return data;
+  if (typeof attrs["before-upload"] === "function") {
+    return attrs["before-upload"](file);
+  } else if (globalOption && typeof globalOption.beforeUpload === "function") {
+    return globalOption.beforeUpload(file);
+  } else {
+    return true;
+  }
+};
+
+const handleonExceed = function (file, fileList) {
+  if (typeof attrs["on-exceed"] === "function") {
+    attrs["on-exceed"](file, fileList);
+  } else if (globalOption && typeof globalOption.onExceed === "function") {
+    globalOption.onExceed(file, fileList);
+  }
+};
+
+const handleChange = function (file, fileList) {
+  const doneFiles = fileList.filter((e) => e.status === "success");
+  if (doneFiles.length === fileList.length) {
+    emits(
+      "update:modelValue",
+      doneFiles.map((e) => {
+        let data = e.response
+          ? propsFinnal.value.responseTransfer(e.response)
+          : e;
+        // 扩展字段
+        data.uid = e.uid;
+        data.status = e.status;
+        return data;
+      })
+    );
+  }
+
+  if (typeof attrs["on-change"] === "function") {
+    attrs["on-change"](file, fileList);
+  }
+};
+const handleProgress = function (e) {
+  if (typeof attrs["on-progress"] === "function") {
+    if (e.total > 0) {
+      e.percent = (e.loaded / e.total) * 100;
+    }
+    attrs["on-progress"](e);
+  }
+};
+const handleRemove = function (file, fileList) {
+  emits(
+    "update:modelValue",
+    fileList.map((e) => {
+      let data = e.response
+        ? propsFinnal.value.responseTransfer(e.response)
+        : e;
+      data.uid = e.uid;
+      return data;
+    })
+  );
+
+  if (typeof attrs["on-remove"] === "function") {
+    attrs["on-remove"](file, fileList);
+  }
+};
+
+const cropperMethod = function (action) {
+  // 剪裁相关处理方法
+  switch (action) {
+    case "save":
+      cropperInstance
+        .getCroppedCanvas({
+          minWidth: propsFinnal.value.imgCropOption.minWidth,
+          minHeight: propsFinnal.value.imgCropOption.minHeight,
+          maxWidth: propsFinnal.value.imgCropOption.maxWidth || 1000,
+          maxHeight: propsFinnal.value.imgCropOption.maxHeight || 1000,
+          imageSmoothingQuality: "medium",
         })
-      );
-
-      if (typeof this.$attrs["on-remove"] === "function") {
-        this.$attrs["on-remove"](file, fileList);
+        .toBlob((blob) => {
+          cropResult.value = blob;
+        }, "image/jpeg");
+      break;
+    case "close":
+      dialogVisible.value = false;
+      if (cropperInstance) {
+        cropperInstance.destroy();
       }
-    },
-    customUpload: async function (params) {
-      if (
-        !this.globalOption &&
-        !this.globalOption.uploadMethod &&
-        !this.propsFinnal.uploadMethod
-      ) {
-        return console.warn(
-          "Uploader: The required configuration [uploadMethod] is missing!"
-        );
+      if (!cropResult.value) {
+        const newValue = [].concat(props.modelValue);
+        newValue.pop();
+        emits("update:modelValue", newValue);
       }
+      break;
+    case "rotateLeft":
+      cropperInstance.rotate(-90);
+      break;
+    case "rotateRight":
+      cropperInstance.rotate(90);
+      break;
+    case "scaleX":
+      cropperInstance.scaleX(-1);
+      break;
+    case "scaleY":
+      cropperInstance.scaleY(-1);
+      break;
+    case "reset":
+      cropperInstance.reset();
+      break;
+    default:
+      console.warn("cropperMethod 参数错误: ", action);
+  }
+};
+const clearFiles = function () {
+  // el-upload 方法
+  myupload.value.clearFiles();
+};
+const abort = function () {
+  controller.value.abort();
+};
+const submit = function () {
+  // el-upload 方法
+  myupload.value.submit();
+};
+// 剪裁图片DOM
+const CropperImg = ref(null);
+// 自定义上传逻辑
+const customUpload = async (params) => {
+  if (
+    !globalOption &&
+    !globalOption.uploadMethod &&
+    !propsFinnal.value.uploadMethod
+  ) {
+    return console.warn(
+      "Uploader: The required configuration [uploadMethod] is missing!"
+    );
+  }
 
-      const theUploadRequest =
-        this.propsFinnal.uploadMethod || this.globalOption.uploadMethod;
-      if (typeof theUploadRequest !== "function") {
-        return console.warn("Uploader: [uploadMethod] must be a Function!");
-      }
+  const theUploadRequest =
+    propsFinnal.value.uploadMethod || globalOption.uploadMethod;
+  if (typeof theUploadRequest !== "function") {
+    return console.warn("Uploader: [uploadMethod] must be a Function!");
+  }
 
-      const uploadedFileType = params.file.type;
-      DEBUG && console.log("uploadedFileType", uploadedFileType);
+  const uploadedFileType = params.file.type;
+  DEBUG && console.log("uploadedFileType", uploadedFileType);
 
-      let formDataFileObj = params.file;
-      let formDataFileName = params.file.name;
+  let formDataFileObj = params.file;
+  let formDataFileName = params.file.name;
 
-      if (uploadedFileType.indexOf("image/") === 0) {
-        if (this.propsFinnal.imgCrop) {
-          // 图片剪裁
-          this.cropResult = null;
-          this.dialogVisible = true;
+  if (uploadedFileType.indexOf("image/") === 0) {
+    if (propsFinnal.value.imgCrop) {
+      // 图片剪裁
+      cropResult.value = null;
+      dialogVisible.value = true;
 
-          const imgBlob = await new Promise((resolve) => {
-            let oReader = new FileReader();
-            oReader.onload = (e) => {
-              let base64 = e.target.result;
-              let img = this.$refs.CropperImg;
-              img.src = base64;
-              //
-              if (cropperInstance) {
-                cropperInstance.destroy();
-              }
-
-              cropperInstance = new Cropper(img, {
-                viewMode: 1,
-                dragMode: "none",
-                movable: false,
-                zoomOnTouch: false,
-                zoomOnWheel: false,
-                toggleDragModeOnDblclick: false,
-                aspectRatio: this.propsFinnal.imgCropOption.ratio,
-              });
-            };
-            oReader.readAsDataURL(params.file);
-
-            this.$watch("cropResult", resolve);
-          });
-
-          if (imgBlob) {
-            DEBUG && console.log("imgCrop", imgBlob);
-            formDataFileObj = imgBlob;
-            formDataFileName = fixJpgFileName(formDataFileName);
-            this.cropperMethod("close");
-          }
-        } else if (this.propsFinnal.imgCompress) {
-          // 图片压缩
-          const imgBlob = await fixImgFile(
-            params.file,
-            Object.assign({}, this.propsFinnal.imgCompressOption, {
-              outType: "blob",
-            })
-          );
-
-          DEBUG && console.log("imgCompress", imgBlob);
-          formDataFileObj = imgBlob;
-          formDataFileName = fixJpgFileName(formDataFileName);
-        }
-      }
-
-      // 上传
-      DEBUG && console.log("upload params", formDataFileName, formDataFileObj);
-      this.controller = new AbortController();
-      return theUploadRequest(formDataFileObj, formDataFileName, {
-        onUploadProgress: this.handleProgress,
-        signal: this.controller.signal,
-      }).then((res) => {
-        return res.data;
-      });
-    },
-    cropperMethod(action) {
-      // 剪裁相关处理方法
-      switch (action) {
-        case "save":
-          cropperInstance
-            .getCroppedCanvas({
-              minWidth: this.propsFinnal.imgCropOption.minWidth,
-              minHeight: this.propsFinnal.imgCropOption.minHeight,
-              maxWidth: this.propsFinnal.imgCropOption.maxWidth || 1000,
-              maxHeight: this.propsFinnal.imgCropOption.maxHeight || 1000,
-              imageSmoothingQuality: "medium",
-            })
-            .toBlob((blob) => {
-              this.cropResult = blob;
-            }, "image/jpeg");
-          break;
-        case "close":
-          this.dialogVisible = false;
+      const imgBlob = await new Promise((resolve) => {
+        let oReader = new FileReader();
+        oReader.onload = (e) => {
+          let base64 = e.target.result;
+          let img = CropperImg.value;
+          img.src = base64;
+          //
           if (cropperInstance) {
             cropperInstance.destroy();
           }
-          if (!this.cropResult) {
-            const newValue = [].concat(this.modelValue);
-            newValue.pop();
-            this.$emit("update:modelValue", newValue);
-          }
-          break;
-        case "rotateLeft":
-          cropperInstance.rotate(-90);
-          break;
-        case "rotateRight":
-          cropperInstance.rotate(90);
-          break;
-        case "scaleX":
-          cropperInstance.scaleX(-1);
-          break;
-        case "scaleY":
-          cropperInstance.scaleY(-1);
-          break;
-        case "reset":
-          cropperInstance.reset();
-          break;
-        default:
-          console.warn("cropperMethod 参数错误: ", action);
+
+          cropperInstance = new Cropper(img, {
+            viewMode: 1,
+            dragMode: "none",
+            movable: false,
+            zoomOnTouch: false,
+            zoomOnWheel: false,
+            toggleDragModeOnDblclick: false,
+            aspectRatio: propsFinnal.value.imgCropOption.ratio,
+          });
+        };
+        oReader.readAsDataURL(params.file);
+
+        watch(cropResult, resolve);
+      });
+
+      if (imgBlob) {
+        DEBUG && console.log("imgCrop", imgBlob);
+        formDataFileObj = imgBlob;
+        formDataFileName = fixJpgFileName(formDataFileName);
+        cropperMethod("close");
       }
-    },
-    clearFiles() {
-      // el-upload 方法
-      this.$refs.myupload.clearFiles();
-    },
-    abort() {
-      this.controller.abort();
-    },
-    submit() {
-      // el-upload 方法
-      this.$refs.myupload.submit();
-    },
-  },
-  created() {
-    this.globalOption = inject("$UploaderOption");
-    DEBUG && console.log(this.globalOption);
-  },
+    } else if (propsFinnal.value.imgCompress) {
+      // 图片压缩
+      const imgBlob = await fixImgFile(
+        params.file,
+        Object.assign({}, propsFinnal.value.imgCompressOption, {
+          outType: "blob",
+        })
+      );
+
+      DEBUG && console.log("imgCompress", imgBlob);
+      formDataFileObj = imgBlob;
+      formDataFileName = fixJpgFileName(formDataFileName);
+    }
+  }
+
+  // 上传
+  DEBUG && console.log("upload params", formDataFileName, formDataFileObj);
+  controller.value = new AbortController();
+  return theUploadRequest(formDataFileObj, formDataFileName, {
+    onUploadProgress: handleProgress,
+    signal: controller.value.signal,
+  }).then((res) => {
+    return res.data;
+  });
 };
+
+// onMounted(() => {
+//   console.warn(CropperImg.value);
+// });
 </script>
+
 <style>
 .uploader-cropper-dialog .el-dialog__body {
   padding: 0;

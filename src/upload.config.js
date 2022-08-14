@@ -57,6 +57,7 @@ export default {
       });
       return false;
     }
+    return true;
   },
   onExceed() {
     ElMessage({
